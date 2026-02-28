@@ -158,6 +158,23 @@ const register = async (req, res) => {
       });
     }
 
+    if (roles.includes("conductor")) {
+      const { error: errorDriver } = await supabase
+        .from("drivers")
+        .insert({
+          user_id: nuevoUsuario.id,
+          estado: "offline"
+        });
+
+      if (errorDriver) {
+        console.error("Error al crear registro en drivers:", errorDriver);
+        return res.status(500).json({
+          success: false,
+          message: "Error interno del servidor"
+        });
+      }
+    }
+
     return res.status(201).json({
       success: true,
       message: "Usuario registrado correctamente",

@@ -69,6 +69,14 @@ const updateStatus = (req, res) => {
       });
     }
 
+    const estadosPermitidos = ["disponible", "ocupado", "offline"];
+    if (!estadosPermitidos.includes(estado)) {
+      return res.status(400).json({
+        success: false,
+        message: "estado no válido. Valores permitidos: disponible, ocupado, offline"
+      });
+    }
+
     let driver = drivers.find(d => d.userId === userId);
 
     // Si no existe, lo creamos
