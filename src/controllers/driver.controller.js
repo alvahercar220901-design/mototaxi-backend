@@ -1,49 +1,64 @@
-// Simulación de base de datos
-// Array exportable para mantener los conductores en memoria
-const drivers = [];
+const supabase = require("../config/supabase");
+
+const ESTADOS_PERMITIDOS = ["disponible", "ocupado", "offline"];
 
 /**
- * Registra un nuevo conductor en el sistema
- * 
- * @param {Object} req - Objeto de petición de Express
- * @param {Object} req.user - Datos del usuario autenticado (inyectado por verifyToken)
- * @param {Object} res - Objeto de respuesta de Express
+ * Registra un nuevo conductor en la tabla drivers (Supabase).
  */
-const registerDriver = (req, res) => {
+const registerDriver = async (req, res) => {
   try {
-    // Extraer userId del usuario autenticado (inyectado por verifyToken)
-    const userId = req.user.userId;
+    const userId = req.user?.userId;
 
-    // Verificar si ya existe un conductor con ese userId (evitar duplicados)
-    const existingDriver = drivers.find(d => d.userId === userId);
-    if (existingDriver) {
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "No autorizado: usuario no identificado"
+      });
+    }
+
+    const { data: existing, error: errorFind } = await supabase
+      .from("drivers")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (errorFind) {
+      console.error("Error al verificar conductor:", errorFind);
+      return res.status(500).json({
+        success: false,
+        message: "Error interno del servidor"
+      });
+    }
+
+    if (existing) {
       return res.status(409).json({
         success: false,
         message: "Ya existe un conductor registrado con ese userId"
       });
     }
 
-    // Crear nuevo conductor con los campos requeridos
-    const newDriver = {
-      userId,
-      estado: "disponible", // Estado inicial siempre es "disponible"
-      createdAt: new Date() // Fecha de creación del registro
-    };
+    const { data: created, error: errorInsert } = await supabase
+      .from("drivers")
+      .insert({ user_id: userId, estado: "disponible" })
+      .select()
+      .single();
 
-    // Guardar el conductor en el array (simulación de BD)
-    drivers.push(newDriver);
+    if (errorInsert) {
+      console.error("Error al registrar conductor:", errorInsert);
+      return res.status(500).json({
+        success: false,
+        message: "Error interno del servidor"
+      });
+    }
 
-    // Responder con éxito y status 201 (Created)
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Conductor registrado correctamente",
-      data: newDriver
+      data: created
     });
-
   } catch (error) {
-    // Manejo de errores inesperados
     console.error("Error en registerDriver:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Error interno del servidor"
     });
@@ -51,65 +66,87 @@ const registerDriver = (req, res) => {
 };
 
 /**
- * Actualiza el estado del conductor
- * Body esperado:
- * {
- *   "estado": "disponible" | "ocupado" | "offline"
- * }
+ * Actualiza el estado del conductor. Si no existe registro, lo crea.
  */
-const updateStatus = (req, res) => {
+const updateStatus = async (req, res) => {
   try {
-    const { estado } = req.body;
-    const userId = req.user.userId;
+    const userId = req.user?.userId;
+    const { estado } = req.body || {};
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "No autorizado: usuario no identificado"
+      });
+    }
 
     if (!estado) {
       return res.status(400).json({
         success: false,
-        message: "estado es requerido"
+        message: "Estado es requerido"
       });
     }
 
-    const estadosPermitidos = ["disponible", "ocupado", "offline"];
-    if (!estadosPermitidos.includes(estado)) {
+    if (!ESTADOS_PERMITIDOS.includes(estado)) {
       return res.status(400).json({
         success: false,
-        message: "estado no válido. Valores permitidos: disponible, ocupado, offline"
+        message: "Estado no válido. Valores permitidos: disponible, ocupado, offline"
       });
     }
 
-    let driver = drivers.find(d => d.userId === userId);
+    const { data: updateData, error: updateError } = await supabase
+      .from("drivers")
+      .update({ estado })
+      .eq("user_id", userId)
+      .select();
 
-    // Si no existe, lo creamos
-    if (!driver) {
-      driver = {
-        userId,
-        estado,
-        activoHasta: new Date(Date.now() + 24 * 60 * 60 * 1000), // 1 día
-        lastUpdate: new Date()
-      };
-      drivers.push(driver);
-    } else {
-      driver.estado = estado;
-      driver.lastUpdate = new Date();
+    if (updateError) {
+      console.error("Error al actualizar estado del conductor:", updateError);
+      return res.status(500).json({
+        success: false,
+        message: "Error al actualizar el estado del conductor"
+      });
     }
 
-    res.json({
+    const updatedRows = updateData == null ? 0 : (Array.isArray(updateData) ? updateData.length : 1);
+
+    if (updatedRows === 0) {
+      const { data: insertData, error: insertError } = await supabase
+        .from("drivers")
+        .insert({ user_id: userId, estado })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("Error al crear registro del conductor:", insertError);
+        return res.status(500).json({
+          success: false,
+          message: "Error al crear el registro del conductor"
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Estado del conductor registrado",
+        data: insertData
+      });
+    }
+
+    return res.json({
       success: true,
       message: "Estado del conductor actualizado",
-      data: driver
+      data: updateData
     });
-
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
+    console.error("Error en updateStatus:", error);
+    return res.status(500).json({
       success: false,
-      message: "Error interno"
+      message: "Error interno del servidor"
     });
   }
 };
 
 module.exports = {
-  drivers, // Array exportable para mantener los conductores en memoria
   registerDriver,
   updateStatus
 };
