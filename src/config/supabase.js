@@ -13,11 +13,12 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
 
 // Validar que las variables de entorno estén definidas
 if (!supabaseUrl) {
-  throw new Error("SUPABASE_URL no está definida en las variables de entorno");
+  console.error("SUPABASE_URL no está definida");
 }
 
-if (!supabaseServiceKey) {
-  throw new Error("SUPABASE_SERVICE_KEY no está definida en las variables de entorno");
+
+if (!supabaseUrl) {
+  console.error("SUPABASE_URL no está definida");
 }
 
 // Crear e inicializar el cliente de Supabase
