@@ -16,6 +16,23 @@ const requestTrip = async (req, res) => {
     }
 
     const pasajeroId = req.user.userId;
+    const { lat, lng } = req.body || {};
+
+    if (lat === undefined || lat === null || lng === undefined || lng === null) {
+      return res.status(400).json({
+        success: false,
+        message: "Ubicación requerida"
+      });
+    }
+
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (Number.isNaN(latNum) || Number.isNaN(lngNum)) {
+      return res.status(400).json({
+        success: false,
+        message: "Ubicación requerida"
+      });
+    }
 
     // Verificar si el pasajero ya tiene un viaje activo (excluyendo cancelado y finalizado)
     const estadosActivos = ["buscando", "asignado", "en_progreso"];
@@ -40,21 +57,21 @@ const requestTrip = async (req, res) => {
       });
     }
 
-    // Conductores disponibles desde Supabase: tabla drivers (rol conductor + estado disponible)
-    const { data: conductoresDisponibles, error: errorConductores } = await supabase
-      .from("drivers")
-      .select("user_id")
-      .eq("estado", "disponible");
+    // Conductores cercanos por Haversine (RPC get_nearby_drivers)
+    const { data: conductoresCercanos, error: errorConductores } = await supabase.rpc("get_nearby_drivers", {
+      passenger_lat: latNum,
+      passenger_lng: lngNum
+    });
 
     if (errorConductores) {
-      console.error("Error al consultar conductores:", errorConductores);
+      console.error("Error al consultar conductores cercanos:", errorConductores);
       return res.status(500).json({
         success: false,
         message: "Error interno"
       });
     }
 
-    const hayConductores = conductoresDisponibles && conductoresDisponibles.length > 0;
+    const hayConductores = conductoresCercanos && conductoresCercanos.length > 0;
     if (!hayConductores) {
       return res.status(503).json({
         success: false,
@@ -85,7 +102,7 @@ const requestTrip = async (req, res) => {
       message: "Viaje creado, buscando conductor",
       data: {
         trip: nuevoViaje,
-        conductorSugerido: conductoresDisponibles[0] || null
+        conductoresCercanos: conductoresCercanos || []
       }
     });
 

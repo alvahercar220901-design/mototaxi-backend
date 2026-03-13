@@ -146,7 +146,66 @@ const updateStatus = async (req, res) => {
   }
 };
 
+/**
+ * Actualiza la ubicación actual del conductor (lat, lng) en la tabla drivers.
+ */
+const updateLocation = async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    const { lat, lng } = req.body || {};
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "No autorizado: usuario no identificado"
+      });
+    }
+
+    if (lat === undefined || lng === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "lat y lng son requeridos"
+      });
+    }
+
+    if (typeof lat !== "number" || typeof lng !== "number" || Number.isNaN(lat) || Number.isNaN(lng)) {
+      return res.status(400).json({
+        success: false,
+        message: "lat y lng deben ser números"
+      });
+    }
+
+    const { error: updateError } = await supabase
+      .from("drivers")
+      .update({
+        lat,
+        lng
+      })
+      .eq("user_id", userId);
+
+    if (updateError) {
+      console.error("Error al actualizar ubicación del conductor:", updateError);
+      return res.status(500).json({
+        success: false,
+        message: "Error al actualizar la ubicación del conductor"
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Ubicación actualizada"
+    });
+  } catch (error) {
+    console.error("Error en updateLocation:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error interno del servidor"
+    });
+  }
+};
+
 module.exports = {
   registerDriver,
-  updateStatus
+  updateStatus,
+  updateLocation
 };
